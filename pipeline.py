@@ -34,7 +34,8 @@ class FindWords(beam.DoFn):
 
 class CountWordsTransform(beam.PTransform):
   def expand(self, p_collection):
-    return (p_collection
+    return (
+      p_collection
       | "Find words" >> (beam.ParDo(FindWords()).with_input_types(unicode))
       | "Pair With One" >> beam.Map(lambda word: (word, 1))
       | "Group By" >> beam.GroupByKey()
@@ -42,7 +43,6 @@ class CountWordsTransform(beam.PTransform):
 
 def run():
   pipeline_options = PipelineOptions(['--runner=DirectRunner'])
-  pipeline_options.view_as(SetupOptions).save_main_session = True
 
   def preprocessing_fn(inputs):
     word = inputs['word']
@@ -55,21 +55,22 @@ def run():
 
   with beam.Pipeline(options=pipeline_options) as pipeline:
     with tft_beam.Context(temp_dir=tempfile.mkdtemp()):
-      counts_data = (pipeline
+      counts_data = (
+      pipeline
       | "Load" >> ReadFromText(INPUT_FILE)
-      | "Count Words" >> CountWordsTransform()
-      )
+      | "CountWords" >> CountWordsTransform())
 
-      (transformed_data, transformed_metadata), transform_fn = (
+      (transformed_data, transformed_metadata), _ = (
       (counts_data, COUNTS_METADATA)
       | "AnalyzeAndTransform" >> tft_beam.AnalyzeAndTransformDataset(preprocessing_fn))
 
-      column_names = ['word', 'count', 'count_normalized']
-      transformed_data_coder = tft.coders.CsvCoder(column_names,transformed_metadata.schema)
-      (transformed_data
+      output_column_names = ['word', 'count', 'count_normalized']
+      transformed_data_coder = tft.coders.CsvCoder(output_column_names, transformed_metadata.schema)
+
+      _ = (
+      transformed_data
       | "EncodeToCsv" >> beam.Map(transformed_data_coder.encode)
-      | "Save" >> WriteToText(OUTPUT_FILE)
-      )
+      | "Save" >> WriteToText(OUTPUT_FILE))
 
 if __name__ == '__main__':
   logging.getLogger().setLevel(logging.INFO)
